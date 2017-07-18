@@ -1,18 +1,12 @@
 # Globally Unique ID Generator
 
-[![godoc](http://img.shields.io/badge/godoc-reference-blue.svg?style=flat)](https://godoc.org/github.com/rs/xid) [![license](http://img.shields.io/badge/license-MIT-red.svg?style=flat)](https://raw.githubusercontent.com/rs/xid/master/LICENSE) [![Build Status](https://travis-ci.org/rs/xid.svg?branch=master)](https://travis-ci.org/rs/xid) [![Coverage](http://gocover.io/_badge/github.com/rs/xid)](http://gocover.io/github.com/rs/xid)
+Forked from https://github.com/rs/xid
 
 Package xid is a globally unique id generator library, ready to be used safely directly in your server code.
 
-Xid is using Mongo Object ID algorithm to generate globally unique ids with a different serialization (bast64) to make it shorter when transported as a string:
-https://docs.mongodb.org/manual/reference/object-id/
+- 6-byte value representing the nanoseconds since the Unix epoch,
+- 6-byte random value
 
-- 4-byte value representing the seconds since the Unix epoch,
-- 3-byte machine identifier,
-- 2-byte process id, and
-- 3-byte counter, starting with a random value.
-
-The binary representation of the id is compatible with Mongo 12 bytes Object IDs.
 The string representation is using base32 hex (w/o padding) for better space efficiency
 when stored in that form (20 bytes). The hex variant of base32 is used to retain the
 sortable property of the id.
@@ -48,8 +42,7 @@ Features:
 - Base32 hex encoded by default (20 chars when transported as printable string, still sortable)
 - Non configured, you don't need set a unique machine and/or data center id
 - K-ordered
-- Embedded time with 1 second precision
-- Unicity guaranteed for 16,777,216 (24 bits) unique ids per second and per host/process
+- Embedded time with 6 byte precision
 - Lock-free (i.e.: unlike UUIDv1 and v2)
 
 Best used with [xlog](https://github.com/rs/xlog)'s
@@ -60,11 +53,10 @@ References:
 - http://www.slideshare.net/davegardnerisme/unique-id-generation-in-distributed-systems
 - https://en.wikipedia.org/wiki/Universally_unique_identifier
 - https://blog.twitter.com/2010/announcing-snowflake
-- Python port by [Graham Abbott](https://github.com/graham): https://github.com/graham/python_xid
 
 ## Install
 
-    go get github.com/rs/xid
+    go get github.com/JoinVerse/xid
 
 ## Usage
 
@@ -78,8 +70,6 @@ println(guid.String())
 Get `xid` embedded info:
 
 ```go
-guid.Machine()
-guid.Pid()
 guid.Time()
 guid.Counter()
 ```
@@ -101,7 +91,3 @@ BenchmarkUUIDv4-4   	 1000000	      1452 ns/op	      64 B/op	       2 allocs/op
 ```
 
 Note: UUIDv1 requires a global lock, hence the performence degrading as we add more CPUs.
-
-## Licenses
-
-All source code is licensed under the [MIT License](https://raw.github.com/rs/xid/master/LICENSE).
