@@ -8,7 +8,7 @@
 // when stored in that form (20 bytes). The hex variant of base32 is used to retain the
 // sortable property of the id.
 //
-// Xid doesn't use base32 because case sensitivity and the 2 non alphanum chars may be an
+// Xid doesn't use base64 because case sensitivity and the 2 non alphanum chars may be an
 // issue when transported as a string between various systems. Base36 wasn't retained either
 // because 1/ it's not standard 2/ the resulting size is not predictable (not bit aligned)
 // and 3/ it would not remain sortable. To validate a base32 `xid`, expect a 20 chars long,
