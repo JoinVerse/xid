@@ -1,19 +1,14 @@
-// Package xid is a globally unique id generator suited for web scale
+// Package xid is a globally unique id generator
 //
-// Xid is using Mongo Object ID algorithm to generate globally unique ids:
-// https://docs.mongodb.org/manual/reference/object-id/
-//
-//   - 4-byte value representing the seconds since the Unix epoch,
-//   - 3-byte machine identifier,
-//   - 2-byte process id, and
-//   - 3-byte counter, starting with a random value.
+//   - 6-byte value representing the seconds since the Unix epoch
+//   - 6-byte random value
 //
 // The binary representation of the id is compatible with Mongo 12 bytes Object IDs.
 // The string representation is using base32 hex (w/o padding) for better space efficiency
 // when stored in that form (20 bytes). The hex variant of base32 is used to retain the
 // sortable property of the id.
 //
-// Xid doesn't use base64 because case sensitivity and the 2 non alphanum chars may be an
+// Xid doesn't use base32 because case sensitivity and the 2 non alphanum chars may be an
 // issue when transported as a string between various systems. Base36 wasn't retained either
 // because 1/ it's not standard 2/ the resulting size is not predictable (not bit aligned)
 // and 3/ it would not remain sortable. To validate a base32 `xid`, expect a 20 chars long,
@@ -29,10 +24,7 @@
 //   - Base32 hex encoded by default (16 bytes storage when transported as printable string)
 //   - Non configured, you don't need set a unique machine and/or data center id
 //   - K-ordered
-//   - Embedded time with 1 second precision
-//   - Unicity guaranted for 16,777,216 (24 bits) unique ids per second and per host/process
-//
-// Best used with xlog's RequestIDHandler (https://godoc.org/github.com/rs/xlog#RequestIDHandler).
+//   - Embedded time with 6 byte precision
 //
 // References:
 //
@@ -42,14 +34,11 @@
 package xid
 
 import (
-	"crypto/md5"
 	"crypto/rand"
 	"database/sql/driver"
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"os"
-	"sync/atomic"
 	"time"
 )
 
@@ -71,18 +60,6 @@ const (
 // ErrInvalidID is returned when trying to unmarshal an invalid ID
 var ErrInvalidID = errors.New("xid: invalid ID")
 
-// objectIDCounter is atomically incremented when generating a new ObjectId
-// using NewObjectId() function. It's used as a counter part of an id.
-// This id is initialized with a random value.
-var objectIDCounter = randInt()
-
-// machineId stores machine id generated once and used in subsequent calls
-// to NewObjectId function.
-var machineID = readMachineID()
-
-// pid stores the current process id
-var pid = os.Getpid()
-
 // dec is the decoding map for base32 encoding
 var dec [256]byte
 
@@ -95,50 +72,19 @@ func init() {
 	}
 }
 
-// readMachineId generates machine id and puts it into the machineId global
-// variable. If this function fails to get the hostname, it will cause
-// a runtime error.
-func readMachineID() []byte {
-	id := make([]byte, 3)
-	if hostname, err := os.Hostname(); err == nil {
-		hw := md5.New()
-		hw.Write([]byte(hostname))
-		copy(id, hw.Sum(nil))
-	} else {
-		// Fallback to rand number if machine id can't be gathered
-		if _, randErr := rand.Reader.Read(id); randErr != nil {
-			panic(fmt.Errorf("xid: cannot get hostname nor generate a random number: %v; %v", err, randErr))
-		}
-	}
-	return id
-}
-
-// randInt generates a random uint32
-func randInt() uint32 {
-	b := make([]byte, 3)
-	if _, err := rand.Reader.Read(b); err != nil {
-		panic(fmt.Errorf("xid: cannot generate random number: %v;", err))
-	}
-	return uint32(b[0])<<16 | uint32(b[1])<<8 | uint32(b[2])
-}
-
 // New generates a globaly unique ID
 func New() ID {
 	var id ID
-	// Timestamp, 4 bytes, big endian
-	binary.BigEndian.PutUint32(id[:], uint32(time.Now().Unix()))
-	// Machine, first 3 bytes of md5(hostname)
-	id[4] = machineID[0]
-	id[5] = machineID[1]
-	id[6] = machineID[2]
-	// Pid, 2 bytes, specs don't specify endianness, but we use big endian.
-	id[7] = byte(pid >> 8)
-	id[8] = byte(pid)
-	// Increment, 3 bytes, big endian
-	i := atomic.AddUint32(&objectIDCounter, 1)
-	id[9] = byte(i >> 16)
-	id[10] = byte(i >> 8)
-	id[11] = byte(i)
+	nowBytes := make([]byte, 10)
+	// Timestamp, 6 bytes, big endian
+	binary.BigEndian.PutUint64(nowBytes, uint64(time.Now().UnixNano()))
+	copy(id[0:6], nowBytes[0:6])
+	// Random, 6 bytes
+	b := make([]byte, 6)
+	if _, err := rand.Reader.Read(b); err != nil {
+		panic(fmt.Errorf("xid: cannot generate random number: %v;", err))
+	}
+	copy(id[6:], b)
 	return id
 }
 
@@ -220,29 +166,19 @@ func decode(id *ID, src []byte) {
 // Time returns the timestamp part of the id.
 // It's a runtime error to call this method with an invalid id.
 func (id ID) Time() time.Time {
-	// First 4 bytes of ObjectId is 32-bit big-endian seconds from epoch.
-	secs := int64(binary.BigEndian.Uint32(id[0:4]))
-	return time.Unix(secs, 0)
+	// First 6 bytes of ObjectId is 64-bit big-endian nanos from epoch.
+	nowBytes := make([]byte, 8)
+	copy(nowBytes[0:6], id[0:6])
+	nanos := int64(binary.BigEndian.Uint64(nowBytes))
+	return time.Unix(0, nanos)
 }
 
-// Machine returns the 3-byte machine id part of the id.
+// Counter returns the random value part of the id.
 // It's a runtime error to call this method with an invalid id.
-func (id ID) Machine() []byte {
-	return id[4:7]
-}
-
-// Pid returns the process id part of the id.
-// It's a runtime error to call this method with an invalid id.
-func (id ID) Pid() uint16 {
-	return binary.BigEndian.Uint16(id[7:9])
-}
-
-// Counter returns the incrementing value part of the id.
-// It's a runtime error to call this method with an invalid id.
-func (id ID) Counter() int32 {
-	b := id[9:12]
-	// Counter is stored as big-endian 3-byte value
-	return int32(uint32(b[0])<<16 | uint32(b[1])<<8 | uint32(b[2]))
+func (id ID) Counter() uint64 {
+	b := id[6:]
+	// Counter is stored as big-endian 6-byte value
+	return uint64(uint64(b[0])<<40 | uint64(b[1])<<32 | uint64(b[2])<<24 | uint64(b[3])<<16 | uint64(b[4])<<8 | uint64(b[5]))
 }
 
 // Value implements the driver.Valuer interface.
