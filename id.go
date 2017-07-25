@@ -183,8 +183,7 @@ func (id ID) Counter() uint64 {
 
 // Value implements the driver.Valuer interface.
 func (id ID) Value() (driver.Value, error) {
-	b, err := id.MarshalText()
-	return string(b), err
+	return id[:], nil
 }
 
 // Scan implements the sql.Scanner interface.
@@ -193,7 +192,8 @@ func (id *ID) Scan(value interface{}) (err error) {
 	case string:
 		return id.UnmarshalText([]byte(val))
 	case []byte:
-		return id.UnmarshalText(val)
+		copy(id[:], val[:])
+		return nil
 	default:
 		return fmt.Errorf("xid: scanning unsupported type: %T", value)
 	}
