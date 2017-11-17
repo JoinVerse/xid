@@ -129,6 +129,8 @@ func TestIDDriverScanError(t *testing.T) {
 	assert.EqualError(t, err, "xid: scanning unsupported type: int")
 	err = id.Scan("0")
 	assert.EqualError(t, err, strInvalidID)
+	err = id.Scan([]byte{0x4d, 0x88, 0xe1, 0x5b, 0x60, 0xf4, 0x86, 0xe4, 0x28, 0x41, 0x2d})
+	assert.EqualError(t, err, "xid: scanning byte slice invalid length: 11")
 }
 
 func TestIDDriverScanByteFromDatabase(t *testing.T) {
