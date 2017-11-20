@@ -192,6 +192,9 @@ func (id *ID) Scan(value interface{}) (err error) {
 	case string:
 		return id.UnmarshalText([]byte(val))
 	case []byte:
+		if len(val) != 12 {
+			return fmt.Errorf("xid: scanning byte slice invalid length: %d", len(val))
+		}
 		copy(id[:], val[:])
 		return nil
 	default:
