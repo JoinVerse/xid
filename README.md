@@ -79,7 +79,7 @@ guid.Counter()
 This implementation uses an `/dev/urandom' PRNG to add an unpredictable generation feature.
 
 **NOTE**: If you use this library in an IaaS environment, we recommend to check which PRNG is used. If you use GPC, AWS
-or Azure IaaS, check if your linux distribution has installed the `rng-tools` package to use a dedicated RNG hardware. 
+or Azure IaaS, check if your *unix distribution has installed the `rng-tools` package to use a dedicated RNG hardware. 
 
 Additional resources:
 + [Container-Optimized OS from Google - Security Considerations](https://www.chromium.org/developers/design-documents/chaps-technical-design#TOC-Security-Considerations)
