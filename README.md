@@ -74,6 +74,18 @@ guid.Time()
 guid.Counter()
 ```
 
+## Security Note
+
+This implementation uses an `/dev/urandom' PRNG to add an unpredictable generation feature.
+
+**NOTE**: If you use this library in an IaaS environment, we recommend to check which PRNG is used.
+
+Additional resources:
++ [GCP Security White-papers](https://services.google.com/fh/files/misc/security_whitepapers_march2018.pdf)
++ [Intel DRNG Impl used by Google KMS](https://software.intel.com/en-us/articles/intel-digital-random-number-generator-drng-software-implementation-guide)
++ [Analysis to Linux default PRNG](http://users.ics.aalto.fi/arock/slides/slides_devrand.pdf)
++ [Alternative to default PRNG implementation](http://www.issihosts.com/haveged/)
+
 ## Benchmark
 
 Benchmark against Go [Maxim Bublis](https://github.com/satori)'s [UUID](https://github.com/satori/go.uuid).
