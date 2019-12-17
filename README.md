@@ -86,6 +86,7 @@ Additional resources:
 + [Intel DRNG](https://software.intel.com/en-us/articles/intel-digital-random-number-generator-drng-software-implementation-guide)
 + [Analysis to Linux default PRNG](http://users.ics.aalto.fi/arock/slides/slides_devrand.pdf)
 + [Alternative to default PRNG implementation](http://www.issihosts.com/haveged/)
++ [PRNG in virtualized environments](http://pages.cs.wisc.edu/~swift/papers/oakland14-rng.pdf)
 
 ## Benchmark
 
