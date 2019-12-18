@@ -48,7 +48,7 @@ import (
 // ID represents a unique request id
 type ID [rawLen]byte
 
-type Concurrency uint8
+type Concurrency int8
 
 const (
 	NANO   Concurrency = 0
