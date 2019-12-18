@@ -74,6 +74,79 @@ guid.Time()
 guid.Counter()
 ```
 
+## Security Note
+
+This implementation uses an `/dev/urandom' PRNG to add an unpredictable generation feature.
+
+**NOTE**: If you use this library in an IaaS environment, we recommend to check which PRNG is used. If you use GPC, AWS
+or Azure IaaS, check if your *unix distribution has installed the `rng-tools` package to use a dedicated RNG hardware. 
+
+Additional resources:
++ [Container-Optimized OS from Google - Security Considerations](https://www.chromium.org/developers/design-documents/chaps-technical-design#TOC-Security-Considerations)
++ [Intel DRNG](https://software.intel.com/en-us/articles/intel-digital-random-number-generator-drng-software-implementation-guide)
++ [Analysis to Linux default PRNG](http://users.ics.aalto.fi/arock/slides/slides_devrand.pdf)
++ [Alternative to default PRNG implementation](http://www.issihosts.com/haveged/)
++ [PRNG in virtualized environments](http://pages.cs.wisc.edu/~swift/papers/oakland14-rng.pdf)
+
+## Binary Layout adn Byte Order
+
+The generated value is encoded in 12 octets (96 bits). Each component is encoded with the Big-Endian variant
+(network order)
+
+Exist two methods to create a new ID:
+
+- `New()`: Default method without concurrency sort. This is the most secure ID because it has the most number of bits
+  (48) in to random padding. But if two processes call at the same time the function this can't guarantee the ascendant
+  order.
+
+- `NewConcurrence()` or `NewWithConcurrence(Concurrence, time.Time)`: Method with Atomic concurrence counter.
+  These implementations add a few bytes in ID array (depending to selected impl) to keep ascendant order in the
+  creation of IDs. Types:
+  - **Nano**: Only accept 2^4 unique IDs in 2^16 nanoseconds and reduce the random bytes to 44 bits
+  - **Low**: Only accept 2^8 unique IDs in 2^16 nanoseconds and reduce the random bytes to 40 bits.
+  - **Medium**: Only accept 2^16 unique IDs in 2^16 nanoseconds and reduce the random bytes to 32 bits.
+  - **High**: Only accept 2^24 unique IDs in 2^16 nanoseconds and reduce the random bytes to 24 bits.  
+
+```text
+
+Normal mode: 
+
+ 0                   1                   2                   3
+  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ |                        48_bit_byte_time...                    | 32
+ +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ |     ...48_bit_byte_time       |     48_bit_byte_random...     | 64
+ +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ |                    ...48_bit_byte_random                      | 96
+ +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+Concurrence mode:
+
+ :: General Example
+ 0                   1                   2                   3
+  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ |                        48_bit_byte_time...                    | 32
+ +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ |     ...48_bit_byte_time       |    4_to_16_atomic_counter     | 64
+ +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ |                    24_to_44_bit_byte_random                   | 96
+ +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+
+ :: Nano Example
+ 0                   1                   2                   3
+  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
+ +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ |                        48_bit_byte_time...                    | 32
+ +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ |     ...48_bit_byte_time       |   *   |  44_bit_byte_rand...  | 64
+ +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ |                       ...44_bit_byte_random                   | 96
+ +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+ (*): 4_bits_atomic_counter
+```
+
 ## Benchmark
 
 Benchmark against Go [Maxim Bublis](https://github.com/satori)'s [UUID](https://github.com/satori/go.uuid).

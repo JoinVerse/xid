@@ -39,6 +39,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"sync/atomic"
 	"time"
 )
 
@@ -47,9 +48,17 @@ import (
 // ID represents a unique request id
 type ID [rawLen]byte
 
+type Concurrency int8
+
+const (
+	NANO   Concurrency = 0
+	LOW    Concurrency = 1
+	MEDIUM Concurrency = 2
+	HIGH   Concurrency = 3
+)
+
 const (
 	encodedLen = 20 // string encoded len
-	decodedLen = 15 // len after base32 decoding with the padded data
 	rawLen     = 12 // binary raw len
 
 	// encoding stores a custom version of the base32 encoding with lower case
@@ -57,11 +66,15 @@ const (
 	encoding = "0123456789abcdefghijklmnopqrstuv"
 )
 
-// ErrInvalidID is returned when trying to unmarshal an invalid ID
-var ErrInvalidID = errors.New("xid: invalid ID")
+var (
+	// ErrInvalidID is returned when trying to unmarshal an invalid ID
+	ErrInvalidID = errors.New("xid: invalid ID")
 
-// dec is the decoding map for base32 encoding
-var dec [256]byte
+	// dec is the decoding map for base32 encoding
+	dec [256]byte
+
+	atomicCount = randUInt64()
+)
 
 func init() {
 	for i := 0; i < len(dec); i++ {
@@ -72,20 +85,94 @@ func init() {
 	}
 }
 
-// New generates a globaly unique ID
+// New generates a globally unique ID
 func New() ID {
+	return NewFromTime(time.Now())
+}
+
+// Generates new Global ID with concurrence atomic counter
+func NewConcurrence() ID {
+	return NewWithConcurrence(LOW, time.Now())
+}
+
+// Create ID using a time instance.
+// Apply the 3th SOLID principle: Liskov substitution
+func NewFromTime(t time.Time) ID {
 	var id ID
-	nowBytes := make([]byte, 10)
+
 	// Timestamp, 6 bytes, big endian
-	binary.BigEndian.PutUint64(nowBytes, uint64(time.Now().UnixNano()))
-	copy(id[0:6], nowBytes[0:6])
+	binary.BigEndian.PutUint64(id[:], uint64(t.UnixNano()))
+
 	// Random, 6 bytes
-	b := make([]byte, 6)
-	if _, err := rand.Reader.Read(b); err != nil {
-		panic(fmt.Errorf("xid: cannot generate random number: %v;", err))
+	if _, err := rand.Reader.Read(id[6:12]); err != nil {
+		// See: https://github.com/golang/go/wiki/CodeReviewComments#error-strings
+		panic(fmt.Errorf("xid: cannot generate random number: %v", err))
 	}
-	copy(id[6:], b)
+
 	return id
+}
+
+func NewWithConcurrence(currencyLevel Concurrency, t time.Time) ID {
+	id := NewFromTime(t)
+
+	switch currencyLevel {
+
+	case NANO:
+		ApplyNanoConcurrence(id)
+
+	case LOW:
+		ApplyLowConcurrence(id)
+
+	case MEDIUM:
+		ApplyMediumConcurrence(id)
+
+	case HIGH:
+		ApplyHighConcurrence(id)
+	}
+
+	return id
+}
+
+// Apply concurrence counter to ID.
+// The nano implementation only accept 2^4 unique IDs in 2^16 nanoseconds and reduce the random bytes to 44 bits
+func ApplyNanoConcurrence(id ID) {
+	adder := atomic.AddUint64(&atomicCount, 1)
+	id[6] = (byte(adder << 4) & 0xF0) | (id[6] & 0xF)
+}
+
+// Apply concurrence counter to ID.
+// The low implementation only accept 2^8 unique IDs in 2^16 nanoseconds and reduce the random bytes to 40 bits
+func ApplyLowConcurrence(id ID) {
+	adder := atomic.AddUint64(&atomicCount, 1)
+	id[6] = byte(adder)
+}
+
+// Apply concurrence counter to ID.
+// The medium implementation only accept 2^16 unique IDs in 2^16 nanoseconds and reduce the random bytes to 32 bits
+func ApplyMediumConcurrence(id ID) {
+	adder := atomic.AddUint64(&atomicCount, 1)
+	id[6] = byte(adder >> 8)
+	id[7] = byte(adder)
+}
+
+// Apply concurrence counter to ID.
+// The high implementation only accept 2^24 unique IDs in 2^16 nanoseconds and reduce the random bytes to 24 bits
+func ApplyHighConcurrence(id ID) {
+	adder := atomic.AddUint64(&atomicCount, 1)
+	id[6] = byte(adder >> 16)
+	id[7] = byte(adder >> 8)
+	id[8] = byte(adder)
+}
+
+// randInt generates a random uint16
+func randUInt64() uint64 {
+	b := make([]byte, 2)
+
+	if _, err := rand.Reader.Read(b); err != nil {
+		panic(fmt.Errorf("xid: cannot generate random number: %v", err))
+	}
+
+	return uint64(b[0]) << 32 | uint64(b[1]) << 16 | uint64(b[2]) << 8 | uint64(b[3])
 }
 
 // FromString reads an ID from its string representation
